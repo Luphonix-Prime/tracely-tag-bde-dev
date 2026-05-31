@@ -7,29 +7,57 @@ import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
+const MotionNav = motion.nav as any;
+const MotionDiv = motion.div as any;
+
 export default function Navbar() {
     const [isOpen, setIsOpen] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
+    const [user, setUser] = useState<any>(null);
+    const [mounted, setMounted] = useState(false);
     const pathname = usePathname();
 
     useEffect(() => {
+        setMounted(true);
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 20);
         };
         window.addEventListener('scroll', handleScroll);
+        
+        // Load user from localStorage
+        const stored = localStorage.getItem('traclytag_user');
+        if (stored) {
+            try {
+                setUser(JSON.parse(stored));
+            } catch (e) {}
+        }
+
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
+
+    const handleLogout = async () => {
+        try {
+            await fetch('http://localhost:3000/api/auth/logout', { 
+                method: 'POST',
+                credentials: 'include'
+            });
+        } catch (e) {}
+        localStorage.removeItem('traclytag_user');
+        setUser(null);
+        window.location.reload();
+    };
 
     const navLinks = [
         { href: '/', label: 'Home' },
         { href: '/solutions', label: 'Solutions' },
-        { href: '/platform', label: 'Platform' }, // Added Platform explicitly
+        { href: '/platform', label: 'Platform' },
+        { href: '/pricing', label: 'Pricing' },
         { href: '/about', label: 'About' },
     ];
 
     return (
         <>
-            <motion.nav
+            <MotionNav
                 initial={{ y: -100, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.6, ease: "easeOut" }}
@@ -70,7 +98,7 @@ export default function Navbar() {
                             >
                                 <span className="relative z-10">{link.label}</span>
                                 {pathname === link.href && (
-                                    <motion.div
+                                    <MotionDiv
                                         layoutId="navbar-indicator"
                                         className="absolute inset-0 bg-white shadow-sm border border-secondary-100 rounded-full"
                                         initial={false}
@@ -86,12 +114,38 @@ export default function Navbar() {
 
                     {/* Right Side Actions */}
                     <div className="hidden md:flex items-center space-x-4 pl-8 relative z-10">
-                        <Link
-                            href="/contact"
-                            className="bg-primary-900 text-white hover:bg-accent-600 px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
-                        >
-                            Get Started
-                        </Link>
+                        {mounted && user ? (
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs font-semibold text-primary-900 font-mono">Hi, {user.username}</span>
+                                <a
+                                    href="http://localhost:5173/dashboard"
+                                    className="bg-primary-900 text-white hover:bg-accent-600 px-5 py-2 rounded-full text-xs font-semibold transition-all duration-300"
+                                >
+                                    Dashboard
+                                </a>
+                                <button
+                                    onClick={handleLogout}
+                                    className="border border-secondary-200 text-secondary-600 hover:bg-secondary-50 px-4 py-2 rounded-full text-xs font-medium transition-all duration-300"
+                                >
+                                    Log Out
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <Link
+                                    href="/login"
+                                    className="text-secondary-600 hover:text-primary-900 text-sm font-semibold transition-all"
+                                >
+                                    Sign In
+                                </Link>
+                                <Link
+                                    href="/register"
+                                    className="bg-primary-900 text-white hover:bg-accent-600 px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                                >
+                                    Get Started
+                                </Link>
+                            </>
+                        )}
                     </div>
 
                     {/* Mobile Toggle */}
@@ -108,20 +162,20 @@ export default function Navbar() {
                         </svg>
                     </button>
                 </div>
-            </motion.nav>
+            </MotionNav>
 
             {/* Mobile Menu Overlay - "Sheet" Style */}
             <AnimatePresence>
                 {isOpen && (
-                    <motion.div
+                    <MotionDiv
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-40 bg-white/95 backdrop-blur-xl md:hidden pt-32 px-6"
+                        className="fixed inset-0 z-40 bg-white/95 backdrop-blur-xl md:hidden pt-32 px-6 overflow-y-auto"
                     >
                         <div className="flex flex-col space-y-6">
                             {navLinks.map((link, idx) => (
-                                <motion.div
+                                <MotionDiv
                                     key={link.href}
                                     initial={{ x: -20, opacity: 0 }}
                                     animate={{ x: 0, opacity: 1 }}
@@ -134,24 +188,55 @@ export default function Navbar() {
                                     >
                                         {link.label}
                                     </Link>
-                                </motion.div>
+                                </MotionDiv>
                             ))}
-                            <motion.div
+                            <MotionDiv
                                 initial={{ y: 20, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
                                 transition={{ delay: 0.5 }}
-                                className="pt-8"
+                                className="pt-4 flex flex-col gap-4"
                             >
-                                <Link
-                                    href="/contact"
-                                    onClick={() => setIsOpen(false)}
-                                    className="w-full block text-center bg-primary-900 text-white py-4 rounded-xl text-lg font-bold shadow-xl"
-                                >
-                                    Start Now
-                                </Link>
-                            </motion.div>
+                                {mounted && user ? (
+                                    <>
+                                        <span className="text-sm font-semibold text-primary-900 font-mono self-center">Logged in as {user.username}</span>
+                                        <a
+                                            href="http://localhost:5173/dashboard"
+                                            onClick={() => setIsOpen(false)}
+                                            className="w-full text-center bg-primary-900 text-white py-3.5 rounded-xl text-md font-bold shadow-lg"
+                                        >
+                                            Go to Dashboard
+                                        </a>
+                                        <button
+                                            onClick={() => {
+                                                handleLogout();
+                                                setIsOpen(false);
+                                            }}
+                                            className="w-full text-center border border-secondary-300 text-secondary-700 py-3 rounded-xl text-md font-medium hover:bg-secondary-50"
+                                        >
+                                            Log Out
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Link
+                                            href="/login"
+                                            onClick={() => setIsOpen(false)}
+                                            className="w-full text-center border border-secondary-200 text-secondary-800 py-3.5 rounded-xl text-md font-bold"
+                                        >
+                                            Sign In
+                                        </Link>
+                                        <Link
+                                            href="/register"
+                                            onClick={() => setIsOpen(false)}
+                                            className="w-full text-center bg-primary-900 text-white py-3.5 rounded-xl text-md font-bold shadow-lg"
+                                        >
+                                            Get Started
+                                        </Link>
+                                    </>
+                                )}
+                            </MotionDiv>
                         </div>
-                    </motion.div>
+                    </MotionDiv>
                 )}
             </AnimatePresence>
         </>
