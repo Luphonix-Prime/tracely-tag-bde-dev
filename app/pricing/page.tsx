@@ -18,6 +18,8 @@ export default function PricingPage() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
 
   useEffect(() => {
     // Check if user is logged in
@@ -31,6 +33,24 @@ export default function PricingPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (user?.role === 'master') {
+      fetch('http://localhost:3000/api/companies', {
+        credentials: 'include'
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setCompanies(data);
+          if (data.length > 0) {
+            setSelectedCompanyId(data[0].id);
+          }
+        }
+      })
+      .catch(err => console.error("Failed to load companies", err));
+    }
+  }, [user]);
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
@@ -65,7 +85,7 @@ export default function PricingPage() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan, companyId: user?.role === 'master' ? selectedCompanyId : undefined }),
       });
 
       if (orderResponse.status === 401) {
@@ -107,6 +127,7 @@ export default function PricingPage() {
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_signature: response.razorpay_signature,
                 plan,
+                companyId: user?.role === 'master' ? selectedCompanyId : undefined,
               }),
             });
 
@@ -118,10 +139,14 @@ export default function PricingPage() {
             // 5. Payment verified! Update local state
             setSuccessMsg(`Successfully subscribed to ${plan.toUpperCase()} plan!`);
             
-            // Update local user state
-            const updatedUser = { ...user, subscriptionPlan: plan };
-            localStorage.setItem('traclytag_user', JSON.stringify(updatedUser));
-            setUser(updatedUser);
+            if (user?.role === 'master' && selectedCompanyId) {
+              setCompanies(prev => prev.map(c => c.id === selectedCompanyId ? { ...c, subscriptionPlan: plan } : c));
+            } else {
+              // Update local user state
+              const updatedUser = { ...user, subscriptionPlan: plan };
+              localStorage.setItem('traclytag_user', JSON.stringify(updatedUser));
+              setUser(updatedUser);
+            }
 
             // Redirect back to client dashboard
             setTimeout(() => {
@@ -230,6 +255,26 @@ export default function PricingPage() {
             Select the tier that matches your production output. Ensure absolute authenticity, combat counterfeiting, and satisfy regulatory requirements with ease.
           </p>
         </div>
+        
+        {/* Company Selector for Master Users */}
+        {user?.role === 'master' && (
+          <div className="w-full max-w-md mb-10 p-6 rounded-2xl bg-primary-900/40 border border-primary-800/80 backdrop-blur-md shadow-lg flex flex-col gap-3">
+            <label className="text-xs font-bold text-accent-400 uppercase tracking-widest">
+              Manage Subscription for Company:
+            </label>
+            <select
+              value={selectedCompanyId || ''}
+              onChange={(e) => setSelectedCompanyId(Number(e.target.value))}
+              className="w-full bg-primary-950 border border-primary-800 rounded-xl py-3 px-4 text-white text-sm focus:border-accent-500 outline-none transition-all cursor-pointer h-12"
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.id} className="bg-primary-950 text-white">
+                  {c.name} ({c.subscriptionPlan || 'free'} plan)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Global Messages */}
         {error && (
@@ -253,7 +298,11 @@ export default function PricingPage() {
         {/* Grid cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch w-full">
           {plans.map((plan) => {
-            const isCurrent = user?.subscriptionPlan === plan.planKey || (!user?.subscriptionPlan && plan.planKey === 'free');
+            const targetCompany = user?.role === 'master' && selectedCompanyId
+              ? companies.find(c => c.id === selectedCompanyId)
+              : null;
+            const companyPlan = targetCompany ? (targetCompany.subscriptionPlan || 'free') : (user?.subscriptionPlan || 'free');
+            const isCurrent = plan.planKey === companyPlan;
             return (
               <div
                 key={plan.name}
